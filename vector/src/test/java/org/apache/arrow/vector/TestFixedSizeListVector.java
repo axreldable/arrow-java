@@ -665,4 +665,38 @@ public class TestFixedSizeListVector {
     }
     writer.endList();
   }
+
+  @Test
+  public void testWriteTimeStampNanoTZ() throws Exception {
+    try (final FixedSizeListVector vector =
+        FixedSizeListVector.empty("vector", /* size= */ 3, allocator)) {
+
+      UnionFixedSizeListWriter writer = vector.getWriter();
+      writer.allocate();
+
+      final int valueCount = 10;
+
+      for (int i = 0; i < valueCount; i++) {
+        writer.startList();
+        writer.timeStampNanoTZ().writeTimeStampNanoTZ(i * 1000000000L);
+        writer.timeStampNanoTZ().writeTimeStampNanoTZ((i + 1) * 1000000000L);
+        writer.timeStampNanoTZ().writeTimeStampNanoTZ((i + 2) * 1000000000L);
+        writer.endList();
+      }
+      vector.setValueCount(valueCount);
+
+      UnionFixedSizeListReader reader = vector.getReader();
+      for (int i = 0; i < valueCount; i++) {
+        reader.setPosition(i);
+        assertTrue(reader.isSet());
+        assertTrue(reader.next());
+        assertEquals(i * 1000000000L, reader.reader().readLong().longValue());
+        assertTrue(reader.next());
+        assertEquals((i + 1) * 1000000000L, reader.reader().readLong().longValue());
+        assertTrue(reader.next());
+        assertEquals((i + 2) * 1000000000L, reader.reader().readLong().longValue());
+        assertFalse(reader.next());
+      }
+    }
+  }
 }
