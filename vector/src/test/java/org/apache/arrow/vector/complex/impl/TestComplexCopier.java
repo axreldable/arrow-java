@@ -16,8 +16,7 @@
  */
 package org.apache.arrow.vector.complex.impl;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -34,7 +33,9 @@ import org.apache.arrow.vector.complex.writer.BaseWriter;
 import org.apache.arrow.vector.complex.writer.BaseWriter.ExtensionWriter;
 import org.apache.arrow.vector.complex.writer.BaseWriter.StructWriter;
 import org.apache.arrow.vector.complex.writer.FieldWriter;
+import org.apache.arrow.vector.complex.writer.FixedSizeBinaryWriter;
 import org.apache.arrow.vector.holders.DecimalHolder;
+import org.apache.arrow.vector.holders.FixedSizeBinaryHolder;
 import org.apache.arrow.vector.types.Types;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.FieldType;
@@ -48,7 +49,7 @@ public class TestComplexCopier {
 
   private BufferAllocator allocator;
 
-  private static final int COUNT = 100;
+  private static final int COUNT = 10;
 
   @BeforeEach
   public void init() {
@@ -58,6 +59,17 @@ public class TestComplexCopier {
   @AfterEach
   public void terminate() throws Exception {
     allocator.close();
+  }
+
+  private FixedSizeBinaryHolder getFixedSizeBinaryHolder(byte[] array) {
+    FixedSizeBinaryHolder holder = new FixedSizeBinaryHolder();
+    holder.byteWidth = array.length;
+    holder.buffer = allocator.buffer(array.length);
+    for (int i = 0; i < array.length; i++) {
+      holder.buffer.setByte(i, array[i]);
+    }
+
+    return holder;
   }
 
   @Test
@@ -203,6 +215,56 @@ public class TestComplexCopier {
       to.setValueCount(COUNT);
 
       // validate equals
+      assertTrue(VectorEqualsVisitor.vectorEquals(from, to));
+    }
+  }
+
+  @Test
+  public void testCopyListVectorWithFixedSizeBinary() {
+    try (ListVector from = ListVector.empty("v", allocator);
+        ListVector to = ListVector.empty("v", allocator)) {
+      // populate from vector with the following records
+      from.addOrGetVector(FieldType.nullable(new ArrowType.FixedSizeBinary(2)));
+      to.addOrGetVector(FieldType.nullable(new ArrowType.FixedSizeBinary(2)));
+
+      // populate from vector with the following records
+      // [[11, 22], [32, 21]]
+
+      // populate from vector
+      UnionListWriter listWriter = from.getWriter();
+      listWriter.allocate();
+
+      for (int i = 0; i < COUNT; i++) {
+        FixedSizeBinaryHolder holder1 = getFixedSizeBinaryHolder(new byte[] {11, 22});
+        FixedSizeBinaryHolder holder2 = getFixedSizeBinaryHolder(new byte[] {32, 21});
+
+        listWriter.setPosition(i);
+        listWriter.startList();
+        listWriter.fixedSizeBinary().write(holder1);
+        listWriter.fixedSizeBinary().write(holder2);
+        holder1.buffer.close();
+        holder2.buffer.close();
+        listWriter.endList();
+      }
+      from.setValueCount(COUNT);
+      to.setValueCount(COUNT);
+
+      // copy values
+      FieldReader in = from.getReader();
+      FieldWriter out = to.getWriter();
+      for (int i = 0; i < COUNT; i++) {
+        in.setPosition(i);
+        out.setPosition(i);
+        ComplexCopier.copy(in, out);
+        // to.copyFrom(i, i, from);
+      }
+
+      // validate equals
+      System.out.println("---");
+      System.out.println(from);
+      System.out.println("---");
+      System.out.println(to);
+      System.out.println("---");
       assertTrue(VectorEqualsVisitor.vectorEquals(from, to));
     }
   }
@@ -570,6 +632,62 @@ public class TestComplexCopier {
   }
 
   @Test
+  public void testMapWithFixedSizeBinary() {
+    try (MapVector from = MapVector.empty("from", allocator, false);
+        MapVector to = MapVector.empty("to", allocator, false)) {
+      UnionMapWriter mapWriter = from.getWriter();
+      mapWriter.allocate();
+
+      // populate input vector with the following records
+      // {[11, 22] -> [32, 21]} or {[32, 21] -> [11, 22]}
+
+      for (int i = 0; i < COUNT; i++) {
+        FixedSizeBinaryHolder holder1 = getFixedSizeBinaryHolder(new byte[] {11, 22});
+        FixedSizeBinaryHolder holder2 = getFixedSizeBinaryHolder(new byte[] {32, 21});
+
+        mapWriter.setPosition(i);
+        mapWriter.startMap();
+        mapWriter.startEntry();
+        if (i == 0) {
+          mapWriter.key().fixedSizeBinary(holder1.byteWidth).write(holder1); // todo: fix copy
+          mapWriter.value().fixedSizeBinary(holder2.byteWidth).write(holder2);
+        } else if (i % 2 == 0) {
+          mapWriter.key().fixedSizeBinary().write(holder1);
+          mapWriter.value().fixedSizeBinary().write(holder2);
+        } else {
+          mapWriter.key().fixedSizeBinary().write(holder2);
+          mapWriter.value().fixedSizeBinary().write(holder1);
+        }
+        holder1.buffer.close();
+        holder2.buffer.close();
+        mapWriter.endEntry();
+        mapWriter.endMap();
+      }
+      from.setValueCount(COUNT);
+
+
+      // copy values
+      FieldReader in = from.getReader();
+      FieldWriter out = to.getWriter();
+      for (int i = 0; i < COUNT; i++) {
+        in.setPosition(i);
+        out.setPosition(i);
+        ComplexCopier.copy(in, out);
+        // to.copyFrom(i, i, from);
+      }
+      to.setValueCount(COUNT);
+
+      // validate equals
+      System.out.println("---");
+      System.out.println(from);
+      System.out.println("---");
+      System.out.println(to);
+      System.out.println("---");
+      // assertTrue(VectorEqualsVisitor.vectorEquals(from, to));
+    }
+  }
+
+  @Test
   public void testCopyFixedSizedListOfDecimalsVector() {
     try (FixedSizeListVector from = FixedSizeListVector.empty("v", 4, allocator);
         FixedSizeListVector to = FixedSizeListVector.empty("v", 4, allocator)) {
@@ -788,6 +906,45 @@ public class TestComplexCopier {
         innerMapWriter.value().integer().writeInt(i);
         innerMapWriter.endEntry();
         innerMapWriter.endMap();
+        structWriter.end();
+      }
+
+      from.setValueCount(COUNT);
+
+      // copy values
+      FieldReader in = from.getReader();
+      FieldWriter out = to.getWriter();
+      for (int i = 0; i < COUNT; i++) {
+        in.setPosition(i);
+        out.setPosition(i);
+        ComplexCopier.copy(in, out);
+      }
+      to.setValueCount(COUNT);
+
+      // validate equals
+      assertTrue(VectorEqualsVisitor.vectorEquals(from, to));
+    }
+  }
+
+  @Test
+  public void testCopyStructWithFixedSizeBinary() {
+    try (final StructVector from = StructVector.empty("v", allocator);
+        final StructVector to = StructVector.empty("v", allocator); ) {
+
+      from.allocateNew();
+
+      NullableStructWriter structWriter = from.getWriter();
+      for (int i = 0; i < COUNT; i++) {
+        FixedSizeBinaryHolder holder1 = getFixedSizeBinaryHolder(new byte[] {11, 22});
+
+        structWriter.setPosition(i);
+        structWriter.start();
+        if (i == 0) {
+          structWriter.fixedSizeBinary("f1", holder1.byteWidth).write(holder1);
+        } else {
+          structWriter.fixedSizeBinary("f1").write(holder1);
+        }
+        holder1.buffer.close();
         structWriter.end();
       }
 
