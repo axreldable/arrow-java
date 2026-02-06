@@ -229,9 +229,18 @@ public class ComplexCopier {
     <#list vv.types as type><#list type.minor as minor><#assign name = minor.class?cap_first />
     <#assign fields = minor.fields!type.fields />
     <#assign uncappedName = name?uncap_first/>
-    <#if !minor.typeParams?? || minor.class?starts_with("Decimal") || minor.class == "FixedSizeBinary" >
+    <#if !minor.typeParams?? || minor.class?starts_with("Decimal") >
       case ${name?upper_case}:
       return (FieldWriter) writer.<#if name == "Int">integer<#else>${uncappedName}</#if>();
+    </#if>
+    <#if minor.class == "FixedSizeBinary">
+      case ${name?upper_case}:
+      if (reader.getField().getType() instanceof ArrowType.FixedSizeBinary) {
+        ArrowType.FixedSizeBinary type = (ArrowType.FixedSizeBinary) reader.getField().getType();
+        return (FieldWriter) writer.${uncappedName}(type.getByteWidth());
+      } else {
+        return (FieldWriter) writer.${uncappedName}();
+      }
     </#if>
     </#list></#list>
       case STRUCT:

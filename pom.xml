@@ -840,52 +840,52 @@ under the License.
       </properties>
     </profile>
 
-    <profile>
-      <!--
-           Do not activate Error Prone while running with Eclipse/M2E as it causes incompatibilities
-           with other annotation processors.
-           See https://github.com/jbosstools/m2e-apt/issues/62 for details
-      -->
-      <id>error-prone</id>
-      <activation>
-        <jdk>[17,)</jdk>
-        <property>
-          <name>!m2e.version</name>
-        </property>
-      </activation>
-      <build>
-        <plugins>
-          <plugin>
-            <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-compiler-plugin</artifactId>
-            <configuration>
-              <compilerArgs combine.children="append">
-                <arg>-XDcompilePolicy=simple</arg>
-                <arg>-Xplugin:ErrorProne -XepExcludedPaths:.*/(target/generated-source|format/src/main/java/org/apache/arrow/flatbuf)/.*</arg>
-                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED</arg>
-                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED</arg>
-                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED</arg>
-                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.model=ALL-UNNAMED</arg>
-                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED</arg>
-                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED</arg>
-                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED</arg>
-                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED</arg>
-                <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED</arg>
-                <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED</arg>
-                <arg>--should-stop=ifError=FLOW</arg>
-              </compilerArgs>
-              <annotationProcessorPaths combine.children="append">
-                <path>
-                  <groupId>com.google.errorprone</groupId>
-                  <artifactId>error_prone_core</artifactId>
-                  <version>${error_prone_core.version}</version>
-                </path>
-              </annotationProcessorPaths>
-            </configuration>
-          </plugin>
-        </plugins>
-      </build>
-    </profile>
+<!--    <profile>-->
+<!--      &lt;!&ndash;-->
+<!--           Do not activate Error Prone while running with Eclipse/M2E as it causes incompatibilities-->
+<!--           with other annotation processors.-->
+<!--           See https://github.com/jbosstools/m2e-apt/issues/62 for details-->
+<!--      &ndash;&gt;-->
+<!--      <id>error-prone</id>-->
+<!--      <activation>-->
+<!--        <jdk>[17,)</jdk>-->
+<!--        <property>-->
+<!--          <name>!m2e.version</name>-->
+<!--        </property>-->
+<!--      </activation>-->
+<!--      <build>-->
+<!--        <plugins>-->
+<!--          <plugin>-->
+<!--            <groupId>org.apache.maven.plugins</groupId>-->
+<!--            <artifactId>maven-compiler-plugin</artifactId>-->
+<!--            <configuration>-->
+<!--              <compilerArgs combine.children="append">-->
+<!--                <arg>-XDcompilePolicy=simple</arg>-->
+<!--                <arg>-Xplugin:ErrorProne -XepExcludedPaths:.*/(target/generated-source|format/src/main/java/org/apache/arrow/flatbuf)/.*</arg>-->
+<!--                <arg>-J&#45;&#45;add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED</arg>-->
+<!--                <arg>-J&#45;&#45;add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED</arg>-->
+<!--                <arg>-J&#45;&#45;add-exports=jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED</arg>-->
+<!--                <arg>-J&#45;&#45;add-exports=jdk.compiler/com.sun.tools.javac.model=ALL-UNNAMED</arg>-->
+<!--                <arg>-J&#45;&#45;add-exports=jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED</arg>-->
+<!--                <arg>-J&#45;&#45;add-exports=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED</arg>-->
+<!--                <arg>-J&#45;&#45;add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED</arg>-->
+<!--                <arg>-J&#45;&#45;add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED</arg>-->
+<!--                <arg>-J&#45;&#45;add-opens=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED</arg>-->
+<!--                <arg>-J&#45;&#45;add-opens=jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED</arg>-->
+<!--                <arg>&#45;&#45;should-stop=ifError=FLOW</arg>-->
+<!--              </compilerArgs>-->
+<!--              <annotationProcessorPaths combine.children="append">-->
+<!--                <path>-->
+<!--                  <groupId>com.google.errorprone</groupId>-->
+<!--                  <artifactId>error_prone_core</artifactId>-->
+<!--                  <version>${error_prone_core.version}</version>-->
+<!--                </path>-->
+<!--              </annotationProcessorPaths>-->
+<!--            </configuration>-->
+<!--          </plugin>-->
+<!--        </plugins>-->
+<!--      </build>-->
+<!--    </profile>-->
 
     <profile>
       <id>code-coverage</id>

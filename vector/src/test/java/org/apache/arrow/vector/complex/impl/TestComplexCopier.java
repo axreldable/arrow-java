@@ -33,7 +33,6 @@ import org.apache.arrow.vector.complex.writer.BaseWriter;
 import org.apache.arrow.vector.complex.writer.BaseWriter.ExtensionWriter;
 import org.apache.arrow.vector.complex.writer.BaseWriter.StructWriter;
 import org.apache.arrow.vector.complex.writer.FieldWriter;
-import org.apache.arrow.vector.complex.writer.FixedSizeBinaryWriter;
 import org.apache.arrow.vector.holders.DecimalHolder;
 import org.apache.arrow.vector.holders.FixedSizeBinaryHolder;
 import org.apache.arrow.vector.types.Types;

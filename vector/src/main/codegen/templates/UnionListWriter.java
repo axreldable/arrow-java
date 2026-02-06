@@ -125,6 +125,10 @@ public class Union${listName}Writer extends AbstractFieldWriter {
   <#assign upperName = minor.class?upper_case />
   <#assign capName = minor.class?cap_first />
   <#assign vectName = capName />
+  <#if minor.class == "FixedSizeBinary">
+          ${capName}Writer ${lowerName}(<#list minor.typeParams as typeParam>${typeParam.type} ${typeParam.name}<#sep>, </#sep></#list>);
+    </#if>
+
   @Override
   public ${minor.class}Writer ${lowerName}() {
     return this;
