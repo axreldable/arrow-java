@@ -139,6 +139,74 @@ public class TestListViewVector {
       assertEquals(4, ((BigIntVector) dataVec).get(10));
 
       listViewVector.validate();
+
+      /*
+       * Per Arrow List View format (https://arrow.apache.org/docs/format/Intro.html#list-view):
+       * offset buffer = start of each element, size buffer = length of each element.
+       * getElementStartIndex returns start offset; getElementEndIndex returns end index (start + size).
+       */
+      final ArrowBuf offsetBuf = listViewVector.getOffsetBuffer();
+      final ArrowBuf sizeBuf = listViewVector.getSizeBuffer();
+      for (int i = 0; i < listViewVector.getValueCount(); i++) {
+        int expectedStart = offsetBuf.getInt(i * BaseRepeatedValueViewVector.OFFSET_WIDTH);
+        int expectedSize = sizeBuf.getInt(i * BaseRepeatedValueViewVector.SIZE_WIDTH);
+        int expectedEnd = expectedStart + expectedSize;
+        assertEquals(expectedStart, listViewVector.getElementStartIndex(i),
+            "getElementStartIndex(" + i + ") must return offset (start)");
+        assertEquals(expectedEnd, listViewVector.getElementEndIndex(i),
+            "getElementEndIndex(" + i + ") must return end index (offset + size), not size");
+      }
+      /* Verify iteration [start, end) matches getObject (index 2 has start=3, end=7; old bug returned 4) */
+      int idx = 2;
+      int start = listViewVector.getElementStartIndex(idx);
+      int end = listViewVector.getElementEndIndex(idx);
+      List<?> list = listViewVector.getObject(idx);
+      assertEquals(4, list.size());
+      for (int j = 0; j < list.size(); j++) {
+        assertEquals(((BigIntVector) dataVec).get(start + j), list.get(j));
+      }
+      assertEquals(end - start, list.size());
+    }
+  }
+
+  // todo: finish
+  /**
+   * Test that getElementStartIndex and getElementEndIndex conform to the Arrow List View format:
+   * offset buffer denotes list starts, size buffer denotes list lengths; end index = start + size.
+   * See https://arrow.apache.org/docs/format/Intro.html#list-view
+   */
+  @Test
+  public void testGetElementStartIndexAndEndIndexListViewFormat() {
+    try (ListViewVector listViewVector = ListViewVector.empty("sourceVector", allocator)) {
+      UnionListViewWriter listViewWriter = listViewVector.getWriter();
+      listViewWriter.allocate();
+
+      /* List at 0: 3 elements (start=0, size=3 → end=3) */
+      listViewWriter.setPosition(0);
+      listViewWriter.startListView();
+      listViewWriter.bigInt().writeBigInt(10);
+      listViewWriter.bigInt().writeBigInt(20);
+      listViewWriter.bigInt().writeBigInt(30);
+      listViewWriter.endListView();
+
+      /* List at 1: 2 elements (start=3, size=2 → end=5); start > 0 so end != size */
+      listViewWriter.setPosition(1);
+      listViewWriter.startListView();
+      listViewWriter.bigInt().writeBigInt(40);
+      listViewWriter.bigInt().writeBigInt(50);
+      listViewWriter.endListView();
+
+      listViewWriter.setValueCount(2);
+
+      assertEquals(0, listViewVector.getElementStartIndex(0));
+      assertEquals(3, listViewVector.getElementEndIndex(0));
+      assertEquals(3, listViewVector.getElementStartIndex(1));
+      assertEquals(5, listViewVector.getElementEndIndex(1));
+
+      /* getElementEndIndex must be start+size, not raw size (would fail with old bug at index 1) */
+      assertEquals(
+          listViewVector.getElementStartIndex(1) + 2,
+          listViewVector.getElementEndIndex(1));
     }
   }
 

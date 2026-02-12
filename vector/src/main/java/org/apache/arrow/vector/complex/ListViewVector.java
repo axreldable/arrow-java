@@ -446,7 +446,7 @@ public class ListViewVector extends BaseRepeatedValueViewVector
     }
     int hash = 0;
     final int start = offsetBuffer.getInt(index * OFFSET_WIDTH);
-    final int end = sizeBuffer.getInt(index * OFFSET_WIDTH);
+    final int end = start + sizeBuffer.getInt(index * SIZE_WIDTH);
     for (int i = start; i < end; i++) {
       hash = ByteFunctionHelpers.combineHash(hash, vector.hashCode(i, hasher));
     }
@@ -848,7 +848,7 @@ public class ListViewVector extends BaseRepeatedValueViewVector
    * @param value value to set
    */
   public void setSize(int index, int value) {
-    validateInvariants(offsetBuffer.getInt(index * SIZE_WIDTH), value);
+    validateInvariants(offsetBuffer.getInt(index * OFFSET_WIDTH), value);
 
     sizeBuffer.setInt(index * SIZE_WIDTH, value);
   }
@@ -891,7 +891,7 @@ public class ListViewVector extends BaseRepeatedValueViewVector
 
   @Override
   public int getElementEndIndex(int index) {
-    return sizeBuffer.getInt(index * OFFSET_WIDTH);
+    return offsetBuffer.getInt(index * OFFSET_WIDTH) + sizeBuffer.getInt(index * SIZE_WIDTH);
   }
 
   @Override
