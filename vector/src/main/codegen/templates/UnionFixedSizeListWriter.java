@@ -28,6 +28,9 @@ import java.math.BigDecimal;
 <@pp.dropOutputFile />
 <@pp.changeOutputFile name="/org/apache/arrow/vector/complex/impl/UnionFixedSizeListWriter.java" />
 
+<#function is_timestamp_tz type>
+  <#return type?starts_with("TimeStamp") && type?ends_with("TZ")>
+</#function>
 
 <#include "/@includes/license.ftl" />
 
@@ -111,6 +114,18 @@ public class UnionFixedSizeListWriter extends AbstractFieldWriter {
   public ${name}Writer ${uncappedName}(String name) {
     structName = name;
     return writer.${uncappedName}(name);
+  }
+  <#elseif is_timestamp_tz(minor.class)>
+
+  @Override
+  public ${name}Writer ${uncappedName}() {
+    return this;
+  }
+
+  @Override
+  public ${name}Writer ${uncappedName}(String name<#list minor.typeParams as typeParam>, ${typeParam.type} ${typeParam.name}</#list>) {
+    structName = name;
+    return writer.${uncappedName}(name<#list minor.typeParams as typeParam>, ${typeParam.name}</#list>);
   }
   </#if>
   </#list></#list>
@@ -369,6 +384,24 @@ public class UnionFixedSizeListWriter extends AbstractFieldWriter {
     writer.setPosition(writer.idx() + 1);
   }
 
+      <#elseif is_timestamp_tz(minor.class)>
+  @Override
+  public void write${name}(<#list fields as field>${field.type} ${field.name}<#if field_has_next>, </#if></#list>) {
+    if (writer.idx() >= (idx() + 1) * listSize) {
+      throw new IllegalStateException(String.format("values at index %s is greater than listSize %s", idx(), listSize));
+    }
+    writer.write${name}(<#list fields as field>${field.name}<#if field_has_next>, </#if></#list>);
+    writer.setPosition(writer.idx() + 1);
+  }
+
+  @Override
+  public void write(${name}Holder holder) {
+    if (writer.idx() >= (idx() + 1) * listSize) {
+      throw new IllegalStateException(String.format("values at index %s is greater than listSize %s", idx(), listSize));
+    }
+    writer.write(holder);
+    writer.setPosition(writer.idx() + 1);
+  }
       </#if>
     </#list>
   </#list>

@@ -377,6 +377,41 @@ public class TestFixedSizeListVector {
   }
 
   @Test
+  public void testUnionFixedSizeListWriterTimeStampNanoTZ() throws Exception {
+    // Regression test for https://github.com/apache/arrow-java/issues/552
+    try (final FixedSizeListVector vector =
+        FixedSizeListVector.empty("vector", /* size= */ 2, allocator)) {
+
+      UnionFixedSizeListWriter writer = vector.getWriter();
+      writer.allocate();
+
+      writer.startList();
+      writer.timeStampNanoTZ().writeTimeStampNanoTZ(100L);
+      writer.timeStampNanoTZ().writeTimeStampNanoTZ(200L);
+      writer.endList();
+
+      writer.startList();
+      writer.timeStampNanoTZ().writeTimeStampNanoTZ(300L);
+      writer.timeStampNanoTZ().writeTimeStampNanoTZ(400L);
+      writer.endList();
+
+      writer.setValueCount(2);
+
+      assertEquals(2, vector.getValueCount());
+      @SuppressWarnings("unchecked")
+      List<Long> row0 = (List<Long>) vector.getObject(0);
+      @SuppressWarnings("unchecked")
+      List<Long> row1 = (List<Long>) vector.getObject(1);
+      assertEquals(2, row0.size());
+      assertEquals(100L, row0.get(0));
+      assertEquals(200L, row0.get(1));
+      assertEquals(2, row1.size());
+      assertEquals(300L, row1.get(0));
+      assertEquals(400L, row1.get(1));
+    }
+  }
+
+  @Test
   public void testDecimalIndexCheck() throws Exception {
     try (final FixedSizeListVector vector =
         FixedSizeListVector.empty("vector", /* size= */ 3, allocator)) {
