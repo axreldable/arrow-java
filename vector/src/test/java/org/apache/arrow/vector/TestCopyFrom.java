@@ -26,10 +26,17 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Period;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
+import org.apache.arrow.vector.complex.ListViewVector;
+import org.apache.arrow.vector.IntVector;
 import org.apache.arrow.vector.types.Types.MinorType;
+import org.apache.arrow.vector.types.pojo.ArrowType;
+import org.apache.arrow.vector.types.pojo.Field;
+import org.apache.arrow.vector.types.pojo.FieldType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -1068,6 +1075,42 @@ public class TestCopyFrom {
           assertEquals(val + (long) i, vector2.get(i), "unexpected value at index: " + i);
         }
       }
+    }
+  }
+
+  @Test // https://github.com/apache/arrow-java/issues/471
+  public void testListViewCopy() {
+    final Field childField =
+        new Field(
+            "testChild",
+            new FieldType(false, new ArrowType.Int(32, true), null),
+            null);
+    final Field listField =
+        new Field(
+            "test",
+            new FieldType(false, ArrowType.ListView.INSTANCE, null),
+            Collections.singletonList(childField));
+    try (final ListViewVector src = (ListViewVector) listField.createVector(allocator);
+        final ListViewVector dst = (ListViewVector) listField.createVector(allocator)) {
+      // init child vector
+      final int numValues = 10;
+      final IntVector childSrc = (IntVector) src.getDataVector();
+      childSrc.setValueCount(numValues);
+      for (int ii = 0; ii < numValues; ++ii) {
+        childSrc.set(ii, ii);
+      }
+
+      // init source vector
+      src.setValueCount(1);
+      src.startNewValue(0);
+      src.endValue(0, numValues);
+
+      assertEquals(List.of(0, 1, 2, 3, 4, 5, 6, 7, 8, 9), src.getObject(0));
+
+      dst.setValueCount(src.getValueCount());
+      dst.getDataVector().setValueCount(numValues);
+      dst.copyFrom(0, 0, src);
+      assertEquals(src.getObject(0), dst.getObject(0));
     }
   }
 
