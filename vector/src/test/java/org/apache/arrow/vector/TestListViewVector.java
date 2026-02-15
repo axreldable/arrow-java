@@ -143,6 +143,89 @@ public class TestListViewVector {
   }
 
   @Test
+  public void testBasicListViewVector2() {
+    try (ListViewVector listViewVector = ListViewVector.empty("sourceVector", allocator)) {
+      UnionListViewWriter listViewWriter = listViewVector.getWriter();
+
+      /* allocate memory */
+      listViewWriter.allocate();
+
+      /* write the first list at index 0 */
+      listViewWriter.setPosition(0);
+      listViewWriter.startListView();
+
+      listViewWriter.bigInt().writeBigInt(12);
+      listViewWriter.bigInt().writeBigInt(-7);
+      listViewWriter.bigInt().writeBigInt(25);
+      listViewWriter.endListView();
+
+      /* the second list at index 1 is null (we are not setting any)*/
+
+      /* write the third list at index 2 */
+      listViewWriter.setPosition(2);
+      listViewWriter.startListView();
+
+      listViewWriter.bigInt().writeBigInt(0);
+      listViewWriter.bigInt().writeBigInt(-127);
+      listViewWriter.bigInt().writeBigInt(127);
+      listViewWriter.bigInt().writeBigInt(50);
+      listViewWriter.endListView();
+
+      /* write the fourth list at index 3 (empty list) */
+      listViewWriter.setPosition(3);
+      listViewWriter.startListView();
+      listViewWriter.endListView();
+
+      /* write the fifth list at index 4 */
+      listViewWriter.setPosition(4);
+      listViewWriter.startListView();
+      listViewWriter.bigInt().writeBigInt(1);
+      listViewWriter.bigInt().writeBigInt(2);
+      listViewWriter.bigInt().writeBigInt(3);
+      listViewWriter.bigInt().writeBigInt(4);
+      listViewWriter.endListView();
+
+      listViewWriter.setValueCount(5);
+      // check value count
+      assertEquals(5, listViewVector.getValueCount());
+
+      /* get vector at index 0 -- the value is a BigIntVector*/
+      final ArrowBuf offSetBuffer = listViewVector.getOffsetBuffer();
+      final ArrowBuf sizeBuffer = listViewVector.getSizeBuffer();
+      final FieldVector dataVec = listViewVector.getDataVector();
+
+      // check offset buffer
+      assertEquals(0, offSetBuffer.getInt(0 * BaseRepeatedValueViewVector.OFFSET_WIDTH));
+      assertEquals(0, offSetBuffer.getInt(1 * BaseRepeatedValueViewVector.OFFSET_WIDTH));
+      assertEquals(3, offSetBuffer.getInt(2 * BaseRepeatedValueViewVector.OFFSET_WIDTH));
+      assertEquals(7, offSetBuffer.getInt(3 * BaseRepeatedValueViewVector.OFFSET_WIDTH));
+      assertEquals(7, offSetBuffer.getInt(4 * BaseRepeatedValueViewVector.OFFSET_WIDTH));
+
+      // check size buffer
+      assertEquals(3, sizeBuffer.getInt(0 * BaseRepeatedValueViewVector.SIZE_WIDTH));
+      assertEquals(0, sizeBuffer.getInt(1 * BaseRepeatedValueViewVector.SIZE_WIDTH));
+      assertEquals(4, sizeBuffer.getInt(2 * BaseRepeatedValueViewVector.SIZE_WIDTH));
+      assertEquals(0, sizeBuffer.getInt(3 * BaseRepeatedValueViewVector.SIZE_WIDTH));
+      assertEquals(4, sizeBuffer.getInt(4 * BaseRepeatedValueViewVector.SIZE_WIDTH));
+
+      // check data vector
+      assertEquals(12, ((BigIntVector) dataVec).get(0));
+      assertEquals(-7, ((BigIntVector) dataVec).get(1));
+      assertEquals(25, ((BigIntVector) dataVec).get(2));
+      assertEquals(0, ((BigIntVector) dataVec).get(3));
+      assertEquals(-127, ((BigIntVector) dataVec).get(4));
+      assertEquals(127, ((BigIntVector) dataVec).get(5));
+      assertEquals(50, ((BigIntVector) dataVec).get(6));
+      assertEquals(1, ((BigIntVector) dataVec).get(7));
+      assertEquals(2, ((BigIntVector) dataVec).get(8));
+      assertEquals(3, ((BigIntVector) dataVec).get(9));
+      assertEquals(4, ((BigIntVector) dataVec).get(10));
+
+      listViewVector.validate();
+    }
+  }
+
+  @Test
   public void testImplicitNullVectors() {
     try (ListViewVector listViewVector = ListViewVector.empty("sourceVector", allocator)) {
       UnionListViewWriter listViewWriter = listViewVector.getWriter();
