@@ -54,14 +54,16 @@ public class MetadataAdapter implements CallHeaders {
 
   @Override
   public Iterable<String> getAll(String key) {
-    final Iterable<String> all = this.metadata.getAll(Metadata.Key.of(key, Metadata.ASCII_STRING_MARSHALLER));
+    final Iterable<String> all =
+        this.metadata.getAll(Metadata.Key.of(key, Metadata.ASCII_STRING_MARSHALLER));
     return all != null ? all : Collections.emptyList();
   }
 
   @Override
   public Iterable<byte[]> getAllByte(String key) {
     if (key.endsWith(Metadata.BINARY_HEADER_SUFFIX)) {
-      final Iterable<byte[]> all = this.metadata.getAll(Metadata.Key.of(key, Metadata.BINARY_BYTE_MARSHALLER));
+      final Iterable<byte[]> all =
+          this.metadata.getAll(Metadata.Key.of(key, Metadata.BINARY_BYTE_MARSHALLER));
       return all != null ? all : Collections.emptyList();
     }
     return StreamSupport.stream(getAll(key).spliterator(), false)
