@@ -24,6 +24,7 @@ import java.util.UUID;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.DecimalVector;
+import org.apache.arrow.vector.TestUtils;
 import org.apache.arrow.vector.compare.VectorEqualsVisitor;
 import org.apache.arrow.vector.complex.FixedSizeListVector;
 import org.apache.arrow.vector.complex.ListVector;
@@ -36,6 +37,10 @@ import org.apache.arrow.vector.complex.writer.BaseWriter.StructWriter;
 import org.apache.arrow.vector.complex.writer.FieldWriter;
 import org.apache.arrow.vector.extension.UuidType;
 import org.apache.arrow.vector.holders.DecimalHolder;
+import org.apache.arrow.vector.holders.DurationHolder;
+import org.apache.arrow.vector.holders.FixedSizeBinaryHolder;
+import org.apache.arrow.vector.holders.TimeStampMilliTZHolder;
+import org.apache.arrow.vector.types.TimeUnit;
 import org.apache.arrow.vector.types.Types;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.FieldType;
@@ -477,6 +482,107 @@ public class TestComplexCopier {
       to.setValueCount(COUNT);
 
       // validate equals
+      assertTrue(VectorEqualsVisitor.vectorEquals(from, to));
+    }
+  }
+
+  @Test
+  public void testCopyListVectorWithDuration() {
+    try (ListVector from = ListVector.empty("v", allocator);
+        ListVector to = ListVector.empty("v", allocator)) {
+      UnionListWriter listWriter = from.getWriter();
+      listWriter.allocate();
+
+      DurationHolder holder = new DurationHolder();
+      holder.unit = TimeUnit.MILLISECOND;
+      for (int i = 0; i < COUNT; i++) {
+        listWriter.setPosition(i);
+        listWriter.startList();
+        holder.value = 1000L * i;
+        listWriter.duration().write(holder);
+        holder.value = 2000L * i;
+        listWriter.duration().write(holder);
+        listWriter.endList();
+      }
+      from.setValueCount(COUNT);
+      to.setValueCount(COUNT);
+
+      FieldReader in = from.getReader();
+      FieldWriter out = to.getWriter();
+      for (int i = 0; i < COUNT; i++) {
+        in.setPosition(i);
+        out.setPosition(i);
+        ComplexCopier.copy(in, out);
+      }
+      assertTrue(VectorEqualsVisitor.vectorEquals(from, to));
+    }
+  }
+
+  @Test
+  public void testCopyListVectorWithFixedSizeBinary() {
+    int byteWidth = 4;
+    try (ListVector from = ListVector.empty("v", allocator);
+        ListVector to = ListVector.empty("v", allocator)) {
+      UnionListWriter listWriter = from.getWriter();
+      listWriter.allocate();
+
+      for (int i = 0; i < COUNT; i++) {
+        FixedSizeBinaryHolder holder1 =
+            TestUtils.fixedSizeBinaryHolder(allocator, new byte[] {11, 22});
+        FixedSizeBinaryHolder holder2 =
+            TestUtils.fixedSizeBinaryHolder(allocator, new byte[] {32, 21});
+
+        listWriter.startList();
+        listWriter.fixedSizeBinary().write(holder1);
+        holder1.buffer.close();
+        listWriter.fixedSizeBinary().write(holder2);
+        holder2.buffer.close();
+
+        listWriter.endList();
+      }
+      from.setValueCount(COUNT);
+      to.setValueCount(COUNT);
+
+      FieldReader in = from.getReader();
+      FieldWriter out = to.getWriter();
+      for (int i = 0; i < COUNT; i++) {
+        in.setPosition(i);
+        out.setPosition(i);
+        ComplexCopier.copy(in, out);
+      }
+      assertTrue(VectorEqualsVisitor.vectorEquals(from, to));
+    }
+  }
+
+  @Test
+  public void testCopyListVectorWithTimeStampMilliTZ() {
+    String tz = "UTC";
+    try (ListVector from = ListVector.empty("v", allocator);
+        ListVector to = ListVector.empty("v", allocator)) {
+      UnionListWriter listWriter = from.getWriter();
+      listWriter.allocate();
+
+      TimeStampMilliTZHolder holder = new TimeStampMilliTZHolder();
+      holder.timezone = tz;
+      for (int i = 0; i < COUNT; i++) {
+        listWriter.setPosition(i);
+        listWriter.startList();
+        holder.value = 1000L * i;
+        listWriter.timeStampMilliTZ().write(holder);
+        holder.value = 2000L * i;
+        listWriter.timeStampMilliTZ().write(holder);
+        listWriter.endList();
+      }
+      from.setValueCount(COUNT);
+      to.setValueCount(COUNT);
+
+      FieldReader in = from.getReader();
+      FieldWriter out = to.getWriter();
+      for (int i = 0; i < COUNT; i++) {
+        in.setPosition(i);
+        out.setPosition(i);
+        ComplexCopier.copy(in, out);
+      }
       assertTrue(VectorEqualsVisitor.vectorEquals(from, to));
     }
   }
