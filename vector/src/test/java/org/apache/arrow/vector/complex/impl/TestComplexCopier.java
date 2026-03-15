@@ -24,6 +24,7 @@ import java.util.UUID;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.DecimalVector;
+import org.apache.arrow.vector.TestUtils;
 import org.apache.arrow.vector.compare.VectorEqualsVisitor;
 import org.apache.arrow.vector.complex.FixedSizeListVector;
 import org.apache.arrow.vector.complex.ListVector;
@@ -36,6 +37,8 @@ import org.apache.arrow.vector.complex.writer.BaseWriter.StructWriter;
 import org.apache.arrow.vector.complex.writer.FieldWriter;
 import org.apache.arrow.vector.extension.UuidType;
 import org.apache.arrow.vector.holders.DecimalHolder;
+import org.apache.arrow.vector.holders.FixedSizeBinaryHolder;
+import org.apache.arrow.vector.holders.NullableFixedSizeBinaryHolder;
 import org.apache.arrow.vector.types.Types;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.FieldType;
@@ -203,6 +206,96 @@ public class TestComplexCopier {
       to.setValueCount(COUNT);
 
       // validate equals
+      assertTrue(VectorEqualsVisitor.vectorEquals(from, to));
+    }
+  }
+
+  private static FieldWriter getListWriterForReader(
+      FieldReader reader, BaseWriter.ListWriter writer) {
+    switch (reader.getMinorType()) {
+      case FIXEDSIZEBINARY:
+        return (FieldWriter) writer.fixedSizeBinary();
+      default:
+        throw new UnsupportedOperationException(reader.getMinorType().toString());
+    }
+  }
+
+  private void copyStub(FieldReader reader, FieldWriter writer) {
+    switch (reader.getMinorType()) {
+      case LIST:
+      case LISTVIEW:
+      case LARGELIST:
+      case LARGELISTVIEW:
+      case FIXED_SIZE_LIST:
+        if (reader.isSet()) {
+          writer.startList();
+          while (reader.next()) {
+            FieldReader childReader = reader.reader();
+            FieldWriter childWriter = getListWriterForReader(childReader, writer);
+            if (childReader.isSet()) {
+              copyStub(childReader, childWriter);
+            } else {
+              childWriter.writeNull();
+            }
+          }
+          writer.endList();
+        } else {
+          writer.writeNull();
+        }
+        break;
+      case FIXEDSIZEBINARY:
+        if (reader.isSet()) {
+          // todo: think about this, maybe we can add
+          //  FixedSizeBinaryWriter fixedSizeBinary(byteWidth); to BaseWriter.ListWriter interfaces
+          NullableFixedSizeBinaryHolder fixedSizeBinaryHolder = new NullableFixedSizeBinaryHolder();
+          reader.read(fixedSizeBinaryHolder);
+          if (fixedSizeBinaryHolder.isSet == 1) {
+            FixedSizeBinaryHolder holder = new FixedSizeBinaryHolder();
+            holder.byteWidth = fixedSizeBinaryHolder.byteWidth;
+            holder.buffer = fixedSizeBinaryHolder.buffer;
+            writer.write(holder);
+          }
+        } else {
+          writer.writeNull();
+        }
+        break;
+      default:
+        throw new UnsupportedOperationException(reader.getMinorType().toString());
+    }
+  }
+
+  @Test
+  public void testCopyListVectorWithFixedSizeBinary() {
+    int byteWidth = 4;
+    try (ListVector from = ListVector.empty("v", allocator);
+        ListVector to = ListVector.empty("v", allocator)) {
+      UnionListWriter listWriter = from.getWriter();
+      listWriter.allocate();
+
+      for (int i = 0; i < COUNT; i++) {
+        FixedSizeBinaryHolder holder1 =
+            TestUtils.fixedSizeBinaryHolder(allocator, new byte[] {11, 22});
+        FixedSizeBinaryHolder holder2 =
+            TestUtils.fixedSizeBinaryHolder(allocator, new byte[] {32, 21});
+
+        listWriter.startList();
+        listWriter.fixedSizeBinary().write(holder1);
+        holder1.buffer.close();
+        listWriter.fixedSizeBinary().write(holder2);
+        holder2.buffer.close();
+
+        listWriter.endList();
+      }
+      from.setValueCount(COUNT);
+      to.setValueCount(COUNT);
+
+      FieldReader in = from.getReader();
+      FieldWriter out = to.getWriter();
+      for (int i = 0; i < COUNT; i++) {
+        in.setPosition(i);
+        out.setPosition(i);
+        copyStub(in, out);
+      }
       assertTrue(VectorEqualsVisitor.vectorEquals(from, to));
     }
   }
