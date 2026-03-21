@@ -887,10 +887,14 @@ public class ListVector extends BaseRepeatedValueVector
         final int currentOffset = offsetBuffer.getInt(i * OFFSET_WIDTH);
         offsetBuffer.setInt((i + 1) * OFFSET_WIDTH, currentOffset);
       }
+      /* Keep lastSet consistent with the active row range (see ARROW-8842). */
+      lastSet = valueCount - 1;
+    } else {
+      lastSet = -1;
     }
-    /* valueCount for the data vector is the current end offset */
+    /* valueCount for the data vector is the end offset at index valueCount */
     final int childValueCount =
-        (valueCount == 0) ? 0 : offsetBuffer.getInt((lastSet + 1) * OFFSET_WIDTH);
+        (valueCount == 0) ? 0 : offsetBuffer.getInt(valueCount * OFFSET_WIDTH);
     /* set the value count of data vector and this will take care of
      * checking whether data buffer needs to be reallocated.
      */

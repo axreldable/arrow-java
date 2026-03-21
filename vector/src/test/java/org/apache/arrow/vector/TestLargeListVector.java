@@ -264,6 +264,39 @@ public class TestLargeListVector {
     }
   }
 
+  /**
+   * ARROW-8842: shrinking value count must set the inner vector's value count from the offset at
+   * {@code valueCount}, not from {@code lastSet}.
+   */
+  @Test
+  public void testLargeListVectorSetValueCountSetsInnerValueCountFromActiveRows() {
+    try (LargeListVector listVector = LargeListVector.empty("list", allocator)) {
+      listVector.addOrGetVector(FieldType.nullable(MinorType.BIGINT.getType()));
+      listVector.allocateNew();
+      BigIntVector data = (BigIntVector) listVector.getDataVector();
+
+      int s0 = listVector.startNewValue(0);
+      data.setSafe(s0, 1, 1L);
+      data.setSafe(s0 + 1, 1, 2L);
+      listVector.endValue(0, 2);
+
+      int s1 = listVector.startNewValue(1);
+      data.setSafe(s1, 1, 3L);
+      listVector.endValue(1, 1);
+
+      int s2 = listVector.startNewValue(2);
+      data.setSafe(s2, 1, 4L);
+      data.setSafe(s2 + 1, 1, 5L);
+      data.setSafe(s2 + 2, 1, 6L);
+      listVector.endValue(2, 3);
+
+      assertEquals(6, data.getValueCount());
+      listVector.setValueCount(1);
+      assertEquals(2, data.getValueCount());
+      assertEquals(0, listVector.getLastSet());
+    }
+  }
+
   @Test
   public void testSplitAndTransfer() throws Exception {
     try (LargeListVector listVector = LargeListVector.empty("sourceVector", allocator)) {

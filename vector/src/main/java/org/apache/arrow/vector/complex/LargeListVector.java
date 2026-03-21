@@ -1032,10 +1032,14 @@ public class LargeListVector extends BaseValueVector
         final long currentOffset = offsetBuffer.getLong((long) i * OFFSET_WIDTH);
         offsetBuffer.setLong(((long) i + 1L) * OFFSET_WIDTH, currentOffset);
       }
+      /* Keep lastSet consistent with the active row range (see ARROW-8842). */
+      lastSet = valueCount - 1;
+    } else {
+      lastSet = -1;
     }
-    /* valueCount for the data vector is the current end offset */
+    /* valueCount for the data vector is the end offset at index valueCount */
     final long childValueCount =
-        (valueCount == 0) ? 0 : offsetBuffer.getLong(((long) lastSet + 1L) * OFFSET_WIDTH);
+        (valueCount == 0) ? 0 : offsetBuffer.getLong((long) valueCount * OFFSET_WIDTH);
     /* set the value count of data vector and this will take care of
      * checking whether data buffer needs to be reallocated.
      * TODO: revisit when 64-bit vectors are supported
