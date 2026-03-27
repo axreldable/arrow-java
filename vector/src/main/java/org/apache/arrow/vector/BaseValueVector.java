@@ -261,6 +261,20 @@ public abstract class BaseValueVector implements ValueVector {
   }
 
   /**
+   * Set the validity at the given index.
+   *
+   * @param index index of the value to set
+   * @param value value to set (0 for unset and 1 for a set)
+   */
+  public void setValidity(int index, int value) {
+    if (value == 0) {
+      BitVectorHelper.unsetBit(validityBuffer, index);
+    } else {
+      BitVectorHelper.setBit(validityBuffer, index);
+    }
+  }
+
+  /**
    * Transfer the validity buffer from `validityBuffer` to the target vector's `validityBuffer`.
    * Start at `startIndex` and copy `length` number of elements. If the starting index is 8 byte
    * aligned, then the buffer is sliced from that index and ownership is transferred. If not,

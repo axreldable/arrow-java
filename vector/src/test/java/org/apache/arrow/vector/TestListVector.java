@@ -67,6 +67,71 @@ public class TestListVector {
     allocator.close();
   }
 
+  //  @Test
+  //  public void test1() throws Exception {
+  //    try (ListVector inVector = ListVector.empty("input", allocator)) {
+  //      UnionListWriter writer = inVector.getWriter();
+  //      writer.allocate();
+  //
+  //      // populate input vector with the following records
+  //      // [1, 2, 3]
+  //      // null
+  //      // []
+  //      // null
+  //      // null
+  //      writer.setPosition(0); // optional
+  //      writer.startList();
+  //      writer.bigInt().writeBigInt(1);
+  //      writer.bigInt().writeBigInt(2);
+  //      writer.bigInt().writeBigInt(3);
+  //      writer.endList();
+  //
+  //      writer.setPosition(2);
+  //      writer.startList();
+  //      writer.endList();
+  //
+  //      writer.setValueCount(5);
+  //
+  //      // assert the output vector is correct
+  //      FieldReader reader = inVector.getReader();
+  //      assertTrue(reader.isSet(), "shouldn't be null");
+  //      reader.setPosition(1);
+  //      assertFalse(reader.isSet(), "should be null");
+  //      reader.setPosition(2);
+  //      assertTrue(reader.isSet(), "shouldn't be null");
+  //      reader.setPosition(3);
+  //      assertFalse(reader.isSet(), "should be null");
+  //
+  //      /* index 0 */
+  //      Object result = inVector.getObject(0);
+  //      ArrayList<Long> resultSet = (ArrayList<Long>) result;
+  //      assertEquals(3, resultSet.size());
+  //      assertEquals(Long.valueOf(1), resultSet.get(0));
+  //      assertEquals(Long.valueOf(2), resultSet.get(1));
+  //      assertEquals(Long.valueOf(3), resultSet.get(2));
+  //
+  //      /* index 1 */
+  //      result = inVector.getObject(1);
+  //      assertNull(result);
+  //
+  //      /* index 2 */
+  //      result = inVector.getObject(2);
+  //      resultSet = (ArrayList<Long>) result;
+  //      assertEquals(0, resultSet.size());
+  //
+  //      /* index 3 */
+  //      result = inVector.getObject(3);
+  //      assertNull(result);
+  //
+  //      /* index 4 */
+  //      result = inVector.getObject(4);
+  //      assertNull(result);
+  //
+  //      /* 3+0+0+0+0/5 */
+  //      assertEquals(0.6D, inVector.getDensity(), 0);
+  //    }
+  //  }
+
   @Test
   public void testCopyFrom() throws Exception {
     try (ListVector inVector = ListVector.empty("input", allocator);
@@ -221,6 +286,10 @@ public class TestListVector {
        */
       listVector.setLastSet(2);
       listVector.setValueCount(10);
+      //      System.out.println(offsetBuffer);
+      //      System.out.println(offsetBuffer.getShort(1));
+      //      System.out.println(dataVector);
+      //      System.out.println(listVector);
 
       /* (3+2+3)/10 */
       assertEquals(0.8D, listVector.getDensity(), 0);
@@ -1405,5 +1474,59 @@ public class TestListVector {
       writer.integer().writeInt(v);
     }
     writer.endList();
+  }
+
+  /**
+   * ListVector from the <a
+   * href="https://arrow.apache.org/docs/format/Intro.html#list">specification</a>.
+   */
+  private void initializeListVectorAsInSpecification(ListVector listVector) {
+    /*
+    values = [12, -7, 25, 0, -127, 127, 50]
+    validity = [1, 1, 0, 1] (reversed)
+    offsets = [0, 3, 3, 7]
+    vector: [[12, -7, 25], null, [0, -127, 127, 50], []]
+    */
+    initializeListVector(
+        listVector,
+        List.of(12, -7, 25, 0, -127, 127, 50),
+        List.of(1, 1, 0, 1),
+        List.of(0, 3, 3, 7));
+  }
+
+  private void initializeListVector(
+      ListVector listVector, List<Integer> values, List<Integer> validity, List<Integer> offsets) {
+    listVector.allocateNew();
+
+    FieldType fieldType = new FieldType(true, new ArrowType.Int(16, true), null, null);
+    Field field = new Field("child-vector", fieldType, null);
+    listVector.initializeChildrenFromFields(java.util.Collections.singletonList(field));
+
+    // Set values in the child vector.
+    FieldVector fieldVector = listVector.getDataVector();
+    fieldVector.clear();
+
+    SmallIntVector childVector = (SmallIntVector) fieldVector;
+    childVector.allocateNew(values.size());
+    for (int i = 0; i < values.size(); i++) {
+      childVector.set(i, values.get(i));
+    }
+    childVector.setValueCount(values.size());
+
+    // Set validity buffer using BitVectorHelper
+    List<Integer> reversedValidity = new ArrayList<>(validity);
+    java.util.Collections.reverse(reversedValidity);
+    for (int i = 0; i < reversedValidity.size(); i++) {
+      listVector.setValidity(i, reversedValidity.get(i));
+    }
+
+    // Set offset buffer
+    for (int i = 0; i < offsets.size(); i++) {
+      listVector.getOffsetBuffer().setInt(i * ListVector.OFFSET_WIDTH, offsets.get(i));
+    }
+
+    // Set value count using `setValueCount` method.
+    // For ListVector, we need offsets.size() - 1 since offsets has N+1 entries
+    listVector.setValueCount(offsets.size() - 1);
   }
 }

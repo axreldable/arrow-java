@@ -848,20 +848,6 @@ public class LargeListViewVector extends BaseLargeRepeatedValueViewVector
   }
 
   /**
-   * Set the validity at the given index.
-   *
-   * @param index index of the value to set
-   * @param value value to set (0 for unset and 1 for a set)
-   */
-  public void setValidity(int index, int value) {
-    if (value == 0) {
-      BitVectorHelper.unsetBit(validityBuffer, index);
-    } else {
-      BitVectorHelper.setBit(validityBuffer, index);
-    }
-  }
-
-  /**
    * Sets the value count for the vector.
    *
    * <p>Important note: The underlying vector does not support 64-bit allocations yet. This may

@@ -857,20 +857,6 @@ public class ListViewVector extends BaseRepeatedValueViewVector
     setElementSizeBuffer(index, value);
   }
 
-  /**
-   * Set the validity at the given index.
-   *
-   * @param index index of the value to set
-   * @param value value to set (0 for unset and 1 for a set)
-   */
-  public void setValidity(int index, int value) {
-    if (value == 0) {
-      BitVectorHelper.unsetBit(validityBuffer, index);
-    } else {
-      BitVectorHelper.setBit(validityBuffer, index);
-    }
-  }
-
   @Override
   public void setValueCount(int valueCount) {
     this.valueCount = valueCount;
