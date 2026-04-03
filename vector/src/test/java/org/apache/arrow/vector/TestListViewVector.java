@@ -2296,6 +2296,25 @@ public class TestListViewVector {
         List.of(3, 0, 4, 0, 2));
   }
 
+  private void initializeValuesVectorWithSmallInt(
+      BaseRepeatedValueViewVector valueVector, List<Integer> values) {
+    // Initialize the child vector using `initializeChildrenFromFields` method with SmallInt.
+    FieldType fieldType = new FieldType(true, new ArrowType.Int(16, true), null, null);
+    Field field = new Field("child-vector", fieldType, null);
+    valueVector.initializeChildrenFromFields(Collections.singletonList(field));
+
+    // Set values in the child vector.
+    FieldVector fieldVector = valueVector.getDataVector();
+    fieldVector.clear();
+
+    SmallIntVector childVector = (SmallIntVector) fieldVector;
+    childVector.allocateNew(values.size());
+    for (int i = 0; i < values.size(); i++) {
+      childVector.set(i, values.get(i));
+    }
+    childVector.setValueCount(values.size());
+  }
+
   private void initializeListViewVector(
       ListViewVector listViewVector,
       List<Integer> values,
@@ -2305,22 +2324,7 @@ public class TestListViewVector {
     // Allocate buffers in listViewVector by calling `allocateNew` method.
     assert offsets.size() == sizes.size();
     listViewVector.allocateNew();
-
-    // Initialize the child vector using `initializeChildrenFromFields` method.
-    FieldType fieldType = new FieldType(true, new ArrowType.Int(16, true), null, null);
-    Field field = new Field("child-vector", fieldType, null);
-    listViewVector.initializeChildrenFromFields(Collections.singletonList(field));
-
-    // Set values in the child vector.
-    FieldVector fieldVector = listViewVector.getDataVector();
-    fieldVector.clear();
-
-    SmallIntVector childVector = (SmallIntVector) fieldVector;
-    childVector.allocateNew(values.size());
-    for (int i = 0; i < values.size(); i++) {
-      childVector.set(i, values.get(i));
-    }
-    childVector.setValueCount(values.size());
+    initializeValuesVectorWithSmallInt(listViewVector, values);
 
     // Set validity, offset and size buffers using `setValidity`,
     //  `setOffset` and `setSize` methods.

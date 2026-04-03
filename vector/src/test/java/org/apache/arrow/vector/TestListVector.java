@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import org.apache.arrow.memory.ArrowBuf;
@@ -1494,16 +1495,15 @@ public class TestListVector {
         List.of(0, 3, 3, 7));
   }
 
-  private void initializeListVector(
-      ListVector listVector, List<Integer> values, List<Integer> validity, List<Integer> offsets) {
-    listVector.allocateNew();
-
+  private void initializeValuesVectorWithSmallInt(
+      BaseRepeatedValueVector valueVector, List<Integer> values) {
+    // Initialize the child vector using `initializeChildrenFromFields` method with SmallInt.
     FieldType fieldType = new FieldType(true, new ArrowType.Int(16, true), null, null);
     Field field = new Field("child-vector", fieldType, null);
-    listVector.initializeChildrenFromFields(java.util.Collections.singletonList(field));
+    valueVector.initializeChildrenFromFields(Collections.singletonList(field));
 
     // Set values in the child vector.
-    FieldVector fieldVector = listVector.getDataVector();
+    FieldVector fieldVector = valueVector.getDataVector();
     fieldVector.clear();
 
     SmallIntVector childVector = (SmallIntVector) fieldVector;
@@ -1512,8 +1512,14 @@ public class TestListVector {
       childVector.set(i, values.get(i));
     }
     childVector.setValueCount(values.size());
+  }
 
-    // Set validity buffer using BitVectorHelper
+  private void initializeListVector(
+      ListVector listVector, List<Integer> values, List<Integer> validity, List<Integer> offsets) {
+    listVector.allocateNew();
+    initializeValuesVectorWithSmallInt(listVector, values);
+
+    // Set validity buffer
     List<Integer> reversedValidity = new ArrayList<>(validity);
     java.util.Collections.reverse(reversedValidity);
     for (int i = 0; i < reversedValidity.size(); i++) {
@@ -1522,7 +1528,7 @@ public class TestListVector {
 
     // Set offset buffer
     for (int i = 0; i < offsets.size(); i++) {
-      listVector.getOffsetBuffer().setInt(i * ListVector.OFFSET_WIDTH, offsets.get(i));
+      listVector.setOffset(i, offsets.get(i));
     }
 
     // Set value count using `setValueCount` method.

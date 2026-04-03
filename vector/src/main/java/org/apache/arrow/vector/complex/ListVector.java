@@ -870,6 +870,17 @@ public class ListVector extends BaseRepeatedValueVector
   }
 
   /**
+   * Set the offset at the given index. Make sure to use this function after updating `field` vector
+   * and using `setValidity`
+   *
+   * @param index index of the value to set
+   * @param value value to set
+   */
+  public void setOffset(int index, int value) {
+    offsetBuffer.setInt((long) index * OFFSET_WIDTH, value);
+  }
+
+  /**
    * Sets the value count for the vector.
    *
    * @param valueCount value count
