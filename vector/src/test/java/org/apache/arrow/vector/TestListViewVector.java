@@ -1547,7 +1547,7 @@ public class TestListViewVector {
   }
 
   @Test
-  public void testOutOfOrderOffset1() {
+  public void testOutOfOrderOffset() {
     // [[12, -7, 25], null, [0, -127, 127, 50], [], [50, 12]]
     try (ListViewVector listViewVector = ListViewVector.empty("listview", allocator)) {
       initializeListViewVectorAsInSpecification(listViewVector);
@@ -2296,6 +2296,40 @@ public class TestListViewVector {
         List.of(3, 0, 4, 0, 2));
   }
 
+  private void initializeValuesVectorWithSmallInt(
+      BaseRepeatedValueViewVector vector, List<Integer> values) {
+    vector.addOrGetVector(FieldType.nullable(MinorType.SMALLINT.getType()));
+    SmallIntVector childVector = (SmallIntVector) vector.getDataVector();
+    childVector.allocateNew(values.size());
+    for (int i = 0; i < values.size(); i++) {
+      childVector.set(i, values.get(i));
+    }
+    childVector.setValueCount(values.size());
+  }
+
+  private void setOffsets(
+      ListViewVector vector, List<Integer> validity, List<Integer> offsets, List<Integer> sizes) {
+    assert offsets.size() == sizes.size();
+    // Set validity, offset and size buffers using `setValidity`,
+    //  `setOffset` and `setSize` methods.
+    List<Integer> reversedValidity = new ArrayList<>(validity);
+    Collections.reverse(reversedValidity);
+    for (int i = 0; i < reversedValidity.size(); i++) {
+      vector.setValidity(i, reversedValidity.get(i));
+    }
+
+    for (int i = 0; i < offsets.size(); i++) {
+      vector.setOffset(i, offsets.get(i));
+    }
+
+    for (int i = 0; i < sizes.size(); i++) {
+      vector.setSize(i, sizes.get(i));
+    }
+
+    // Set value count using `setValueCount` method.
+    vector.setValueCount(offsets.size());
+  }
+
   private void initializeListViewVector(
       ListViewVector listViewVector,
       List<Integer> values,
@@ -2303,42 +2337,8 @@ public class TestListViewVector {
       List<Integer> offsets,
       List<Integer> sizes) {
     // Allocate buffers in listViewVector by calling `allocateNew` method.
-    assert offsets.size() == sizes.size();
     listViewVector.allocateNew();
-
-    // Initialize the child vector using `initializeChildrenFromFields` method.
-    FieldType fieldType = new FieldType(true, new ArrowType.Int(16, true), null, null);
-    Field field = new Field("child-vector", fieldType, null);
-    listViewVector.initializeChildrenFromFields(Collections.singletonList(field));
-
-    // Set values in the child vector.
-    FieldVector fieldVector = listViewVector.getDataVector();
-    fieldVector.clear();
-
-    SmallIntVector childVector = (SmallIntVector) fieldVector;
-    childVector.allocateNew(values.size());
-    for (int i = 0; i < values.size(); i++) {
-      childVector.set(i, values.get(i));
-    }
-    childVector.setValueCount(values.size());
-
-    // Set validity, offset and size buffers using `setValidity`,
-    //  `setOffset` and `setSize` methods.
-    List<Integer> reversedValidity = new ArrayList<>(validity);
-    Collections.reverse(reversedValidity);
-    for (int i = 0; i < reversedValidity.size(); i++) {
-      listViewVector.setValidity(i, reversedValidity.get(i));
-    }
-
-    for (int i = 0; i < offsets.size(); i++) {
-      listViewVector.setOffset(i, offsets.get(i));
-    }
-
-    for (int i = 0; i < sizes.size(); i++) {
-      listViewVector.setSize(i, sizes.get(i));
-    }
-
-    // Set value count using `setValueCount` method.
-    listViewVector.setValueCount(offsets.size());
+    initializeValuesVectorWithSmallInt(listViewVector, values);
+    setOffsets(listViewVector, validity, offsets, sizes);
   }
 }

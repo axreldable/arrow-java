@@ -185,8 +185,9 @@ public class ListVector extends BaseRepeatedValueVector
     if (valueCount == 0) {
       return 0.0D;
     }
-    final int startOffset = offsetBuffer.getInt(0);
-    final int endOffset = offsetBuffer.getInt(valueCount * OFFSET_WIDTH);
+    final int startOffset = getElementStartIndex(0);
+    final int endOffset = getElementStartIndex(valueCount);
+
     final double totalListSize = endOffset - startOffset;
     return totalListSize / valueCount;
   }
@@ -487,8 +488,8 @@ public class ListVector extends BaseRepeatedValueVector
       return ArrowBufPointer.NULL_HASH_CODE;
     }
     int hash = 0;
-    final int start = offsetBuffer.getInt(index * OFFSET_WIDTH);
-    final int end = offsetBuffer.getInt((index + 1) * OFFSET_WIDTH);
+    final int start = getElementStartIndex(index);
+    final int end = getElementEndIndex(index);
     for (int i = start; i < end; i++) {
       hash = ByteFunctionHelpers.combineHash(hash, vector.hashCode(i, hasher));
     }
@@ -556,15 +557,13 @@ public class ListVector extends BaseRepeatedValueVector
           valueCount);
       to.clear();
       if (length > 0) {
-        final int startPoint = offsetBuffer.getInt(startIndex * OFFSET_WIDTH);
-        final int sliceLength =
-            offsetBuffer.getInt((startIndex + length) * OFFSET_WIDTH) - startPoint;
-        to.offsetBuffer = to.allocateOffsetBuffer((length + 1) * OFFSET_WIDTH);
+        final int startPoint = getElementStartIndex(startIndex);
+        final int sliceLength = getElementStartIndex(startIndex + length) - startPoint;
+        to.offsetBuffer = to.allocateOffsetBuffer((long) (length + 1) * OFFSET_WIDTH);
         /* splitAndTransfer offset buffer */
         for (int i = 0; i < length + 1; i++) {
-          final int relativeOffset =
-              offsetBuffer.getInt((startIndex + i) * OFFSET_WIDTH) - startPoint;
-          to.offsetBuffer.setInt(i * OFFSET_WIDTH, relativeOffset);
+          final int relativeOffset = getElementStartIndex(startIndex + i) - startPoint;
+          to.setElementOffsetBuffer(i, relativeOffset);
         }
         /* splitAndTransfer validity buffer */
         splitAndTransferValidityBuffer(startIndex, length, to);
@@ -722,8 +721,8 @@ public class ListVector extends BaseRepeatedValueVector
     if (isSet(index) == 0) {
       return null;
     }
-    final int start = offsetBuffer.getInt(index * OFFSET_WIDTH);
-    final int end = offsetBuffer.getInt((index + 1) * OFFSET_WIDTH);
+    final int start = getElementStartIndex(index);
+    final int end = getElementEndIndex(index);
     final ValueVector vv = getDataVector();
     final List<Object> vals = new JsonStringArrayList<>(end - start);
     for (int i = start; i < end; i++) {
@@ -755,8 +754,8 @@ public class ListVector extends BaseRepeatedValueVector
     if (isNull(index)) {
       return true;
     } else {
-      final int start = offsetBuffer.getInt(index * OFFSET_WIDTH);
-      final int end = offsetBuffer.getInt((index + 1) * OFFSET_WIDTH);
+      final int start = getElementStartIndex(index);
+      final int end = getElementEndIndex(index);
       return start == end;
     }
   }
@@ -768,10 +767,7 @@ public class ListVector extends BaseRepeatedValueVector
    * @return 1 if element at given index is not null, 0 otherwise
    */
   public int isSet(int index) {
-    final int byteIndex = index >> 3;
-    final byte b = validityBuffer.getByte(byteIndex);
-    final int bitIndex = index & 7;
-    return (b >> bitIndex) & 0x01;
+    return BitVectorHelper.get(validityBuffer, index);
   }
 
   /**
@@ -816,6 +812,25 @@ public class ListVector extends BaseRepeatedValueVector
   }
 
   /**
+   * Fills holes in the offset buffer for positions between lastSet and the given index.
+   *
+   * <p>When values are set non-sequentially (e.g., setting position 0 then position 3), positions
+   * 1 and 2 become "holes" in the offset buffer. This method fills those holes by propagating the
+   * previous offset value forward, effectively creating `null` lists for skipped positions.
+   *
+   * <p>This maintains the invariant that offsets are non-decreasing and ensures all positions have
+   * valid offset values.
+   *
+   * @param index the target index up to and including which holes should be filled
+   */
+  private void fillBufferHoles(int index) {
+    for (int i = lastSet + 1; i <= index; i++) {
+      final int currentOffset = getElementStartIndex(i);
+      setElementOffsetBuffer(i + 1, currentOffset);
+    }
+  }
+
+  /**
    * Sets list at index to be null.
    *
    * @param index position in vector
@@ -828,10 +843,7 @@ public class ListVector extends BaseRepeatedValueVector
     if (lastSet >= index) {
       lastSet = index - 1;
     }
-    for (int i = lastSet + 1; i <= index; i++) {
-      final int currentOffset = offsetBuffer.getInt(i * OFFSET_WIDTH);
-      offsetBuffer.setInt((i + 1) * OFFSET_WIDTH, currentOffset);
-    }
+    fillBufferHoles(index);
     BitVectorHelper.unsetBit(validityBuffer, index);
     lastSet = index;
   }
@@ -849,13 +861,10 @@ public class ListVector extends BaseRepeatedValueVector
     if (lastSet >= index) {
       lastSet = index - 1;
     }
-    for (int i = lastSet + 1; i <= index; i++) {
-      final int currentOffset = offsetBuffer.getInt(i * OFFSET_WIDTH);
-      offsetBuffer.setInt((i + 1) * OFFSET_WIDTH, currentOffset);
-    }
+    fillBufferHoles(index);
     BitVectorHelper.setBit(validityBuffer, index);
     lastSet = index;
-    return offsetBuffer.getInt((lastSet + 1) * OFFSET_WIDTH);
+    return getElementEndIndex(lastSet);
   }
 
   /**
@@ -865,8 +874,58 @@ public class ListVector extends BaseRepeatedValueVector
    * @param size number of elements in the list that was written
    */
   public void endValue(int index, int size) {
-    final int currentOffset = offsetBuffer.getInt((index + 1) * OFFSET_WIDTH);
-    offsetBuffer.setInt((index + 1) * OFFSET_WIDTH, currentOffset + size);
+    final int currentOffset = getElementEndIndex(index);
+    setElementOffsetBuffer(index + 1, currentOffset + size);
+  }
+
+  /**
+   * Set the validity at the given index.
+   *
+   * @param index index of the value to set
+   * @param value value to set (0 for unset and 1 for a set)
+   */
+  public void setValidity(int index, int value) {
+    if (value == 0) {
+      BitVectorHelper.unsetBit(validityBuffer, index);
+    } else {
+      BitVectorHelper.setBit(validityBuffer, index);
+    }
+    if (index > lastSet) {
+      setLastSet(index);
+    }
+  }
+
+  /**
+   * Validate the invariants of the offset buffer. 0 <= offsets[i] <= length of the child array
+   *
+   * @param offset the offset at a given index
+   */
+  private void validateInvariants(int offset) {
+    if (offset < 0) {
+      throw new IllegalArgumentException("Offset cannot be negative");
+    }
+
+    // 0 <= offsets[i] <= length of the child array
+    if (offset > this.vector.getValueCount()) {
+      throw new IllegalArgumentException("Offset is out of bounds.");
+    }
+  }
+
+  private void setElementOffsetBuffer(int index, int value) {
+    offsetBuffer.setInt((long) index * OFFSET_WIDTH, value);
+  }
+
+  /**
+   * Set the offset at the given index. Make sure to use this function after updating `field` vector
+   * and using `setValidity`
+   *
+   * @param index index of the value to set
+   * @param value value to set
+   */
+  public void setOffset(int index, int value) {
+    validateInvariants(value);
+
+    setElementOffsetBuffer(index, value);
   }
 
   /**
@@ -882,11 +941,7 @@ public class ListVector extends BaseRepeatedValueVector
         /* check if validity and offset buffers need to be re-allocated */
         reallocValidityAndOffsetBuffers();
       }
-      for (int i = lastSet + 1; i < valueCount; i++) {
-        /* fill the holes with offsets */
-        final int currentOffset = offsetBuffer.getInt(i * OFFSET_WIDTH);
-        offsetBuffer.setInt((i + 1) * OFFSET_WIDTH, currentOffset);
-      }
+      fillBufferHoles(valueCount - 1);
     }
     /* valueCount for the data vector is the current end offset */
     final int childValueCount =
@@ -907,11 +962,11 @@ public class ListVector extends BaseRepeatedValueVector
 
   @Override
   public int getElementStartIndex(int index) {
-    return offsetBuffer.getInt(index * OFFSET_WIDTH);
+    return offsetBuffer.getInt((long) index * OFFSET_WIDTH);
   }
 
   @Override
   public int getElementEndIndex(int index) {
-    return offsetBuffer.getInt((index + 1) * OFFSET_WIDTH);
+    return offsetBuffer.getInt((long) (index + 1) * OFFSET_WIDTH);
   }
 }

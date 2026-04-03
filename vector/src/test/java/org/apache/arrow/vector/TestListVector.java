@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import org.apache.arrow.memory.ArrowBuf;
@@ -1399,11 +1400,145 @@ public class TestListVector {
     }
   }
 
+  @Test
+  public void testListVectorWrittenWithWriter() {
+    try (ListVector listVector = ListVector.empty("vector", allocator)) {
+      UnionListWriter listWriter = listVector.getWriter();
+      listWriter.allocate();
+
+      listWriter.setPosition(0);
+      listWriter.startList();
+      listWriter.integer().writeInt(12);
+      listWriter.integer().writeInt(-7);
+      listWriter.integer().writeInt(25);
+      listWriter.endList();
+
+      listWriter.setPosition(2);
+      listWriter.startList();
+      listWriter.integer().writeInt(0);
+      listWriter.integer().writeInt(-127);
+      listWriter.integer().writeInt(127);
+      listWriter.integer().writeInt(50);
+      listWriter.endList();
+
+      listWriter.setPosition(3);
+      listWriter.startList();
+      listWriter.endList();
+
+      listWriter.setValueCount(4);
+
+      // assert the vector is correct
+      validateListVectorFromSpecification(listVector);
+    }
+  }
+
+  @Test
+  public void testListVectorWrittenWithCustomFunc() {
+    try (ListVector listVector = ListVector.empty("vector", allocator)) {
+      initializeListVectorAsInSpecification(listVector);
+      validateListVectorFromSpecification(listVector);
+    }
+  }
+
   private void writeIntValues(UnionListWriter writer, int[] values) {
     writer.startList();
     for (int v : values) {
       writer.integer().writeInt(v);
     }
     writer.endList();
+  }
+
+  /**
+   * ListViewVector from the <a
+   * href="https://arrow.apache.org/docs/format/Intro.html#list">specification</a>.
+   */
+  private void initializeListVectorAsInSpecification(ListVector listVector) {
+    /*
+    values = [12, -7, 25, 0, -127, 127, 50]
+    validity = [1, 1, 0, 1] (reversed)
+    offsets = [0, 3, 3, 7, 7]
+    vector: [[12, -7, 25], null, [0, -127, 127, 50], []]
+    */
+    initializeListVector(
+        listVector,
+        List.of(12, -7, 25, 0, -127, 127, 50),
+        List.of(1, 1, 0, 1),
+        List.of(0, 3, 3, 7, 7));
+  }
+
+  private void initializeValuesVectorWithInt(BaseRepeatedValueVector vector, List<Integer> values) {
+    vector.addOrGetVector(FieldType.nullable(MinorType.INT.getType()));
+    IntVector childVector = (IntVector) vector.getDataVector();
+    childVector.allocateNew(values.size());
+    for (int i = 0; i < values.size(); i++) {
+      childVector.set(i, values.get(i));
+    }
+    childVector.setValueCount(values.size());
+  }
+
+  private void setOffsets(ListVector vector, List<Integer> validity, List<Integer> offsets) {
+    assert offsets.size()
+        == validity.size() + 1; // offsets is 1 elem bigger to determine the length on the last elem
+    // Set validity, offset and size buffers using `setValidity`,
+    //  `setOffset` and `setSize` methods.
+    List<Integer> reversedValidity = new ArrayList<>(validity);
+    Collections.reverse(reversedValidity);
+    for (int i = 0; i < reversedValidity.size(); i++) {
+      vector.setValidity(i, reversedValidity.get(i));
+    }
+
+    for (int i = 0; i < offsets.size(); i++) {
+      vector.setOffset(i, offsets.get(i));
+    }
+
+    // Set value count using `setValueCount` method.
+    vector.setValueCount(validity.size());
+  }
+
+  private void initializeListVector(
+      ListVector listVector, List<Integer> values, List<Integer> validity, List<Integer> offsets) {
+    listVector.allocateNew();
+    initializeValuesVectorWithInt(listVector, values);
+    setOffsets(listVector, validity, offsets);
+  }
+
+  private void validateListVectorFromSpecification(ListVector listVector) {
+    FieldReader reader = listVector.getReader();
+    assertTrue(reader.isSet(), "shouldn't be null");
+    reader.setPosition(1);
+    assertFalse(reader.isSet(), "should be null");
+    reader.setPosition(2);
+    assertTrue(reader.isSet(), "shouldn't be null");
+    reader.setPosition(3);
+    assertTrue(reader.isSet(), "shouldn't be null");
+
+    /* index 0 */
+    Object result = listVector.getObject(0);
+    ArrayList<Integer> resultSet = (ArrayList<Integer>) result;
+    assertEquals(3, resultSet.size());
+    assertEquals(12, resultSet.get(0));
+    assertEquals(-7, resultSet.get(1));
+    assertEquals(25, resultSet.get(2));
+
+    /* index 1 */
+    result = listVector.getObject(1);
+    assertNull(result);
+
+    /* index 2 */
+    result = listVector.getObject(2);
+    resultSet = (ArrayList<Integer>) result;
+    assertEquals(4, resultSet.size());
+    assertEquals(0, resultSet.get(0));
+    assertEquals(-127, resultSet.get(1));
+    assertEquals(127, resultSet.get(2));
+    assertEquals(50, resultSet.get(3));
+
+    /* index 3 */
+    result = listVector.getObject(3);
+    resultSet = (ArrayList<Integer>) result;
+    assertEquals(0, resultSet.size());
+
+    /* 3+0+4+0/4 */
+    assertEquals(1.75D, listVector.getDensity(), 0);
   }
 }
